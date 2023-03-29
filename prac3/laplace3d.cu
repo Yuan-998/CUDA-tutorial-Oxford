@@ -13,8 +13,8 @@
 // define kernel block size
 ////////////////////////////////////////////////////////////////////////
 
-#define BLOCK_X 16
-#define BLOCK_Y 8
+#define BLOCK_X 32
+#define BLOCK_Y 32
 
 ////////////////////////////////////////////////////////////////////////
 // include kernel function
@@ -98,8 +98,8 @@ int main(int argc, const char **argv){
   dim3 dimGrid(bx,by);
   dim3 dimBlock(BLOCK_X,BLOCK_Y);
 
-  // printf("\n dimGrid  = %d %d %d \n",dimGrid.x,dimGrid.y,dimGrid.z);
-  // printf(" dimBlock = %d %d %d \n",dimBlock.x,dimBlock.y,dimBlock.z);
+  printf("\n dimGrid  = %d %d %d \n",dimGrid.x,dimGrid.y,dimGrid.z);
+  printf(" dimBlock = %d %d %d \n",dimBlock.x,dimBlock.y,dimBlock.z);
 
   // Execute GPU kernel
 
