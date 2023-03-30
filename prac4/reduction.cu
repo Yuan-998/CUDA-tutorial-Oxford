@@ -28,7 +28,7 @@ __global__ void reduction(float *g_odata, float *g_idata, int n)
 
     extern  __shared__  float temp[];
 
-    int tid = threadIdx.x;
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
     // first, each thread loads data into shared memory
 
@@ -38,17 +38,12 @@ __global__ void reduction(float *g_odata, float *g_idata, int n)
 
     for (int d = blockDim.x>>1; d > 0; d >>= 1) {
       __syncthreads();  // ensure previous step completed 
-      if (tid<d)  temp[tid] += temp[tid+d];
+      if (tid<d+blockIdx.x * blockDim.x)  temp[tid] += temp[tid+d];
     }
 
     // finally, first thread puts result into global memory
 
-    if (tid==0) {
-      for (int i = blockDim.x; i < n; i++) {
-        temp[0] += g_idata[i];
-      }
-      g_odata[0] = temp[0];
-    }
+    if (tid==blockIdx.x * blockDim.x) g_odata[tid] = temp[tid];
 }
 
 
@@ -59,7 +54,7 @@ __global__ void reduction(float *g_odata, float *g_idata, int n)
 
 int main( int argc, const char** argv) 
 {
-  int num_elements, num_threads, mem_size, shared_mem_size;
+  int num_elements, num_block, num_threads, mem_size, shared_mem_size;
 
   float *h_data, *reference, sum;
   float *d_idata, *d_odata;
@@ -68,8 +63,9 @@ int main( int argc, const char** argv)
 
   findCudaDevice(argc, argv);
 
-  num_elements = 516;
-  num_threads  = num_elements - num_elements % 32;
+  num_elements = 512;
+  num_block = 2;
+  num_threads  = num_elements/num_block;
   mem_size     = sizeof(float) * num_elements;
 
   // allocate host memory to store the input data
@@ -88,7 +84,7 @@ int main( int argc, const char** argv)
   // allocate device memory input and output arrays
 
   checkCudaErrors( cudaMalloc((void**)&d_idata, mem_size) );
-  checkCudaErrors( cudaMalloc((void**)&d_odata, sizeof(float)) );
+  checkCudaErrors( cudaMalloc((void**)&d_odata, mem_size) );
 
   // copy host memory to device input array
 
@@ -98,17 +94,22 @@ int main( int argc, const char** argv)
   // execute the kernel
 
   shared_mem_size = sizeof(float) * num_elements;
-  reduction<<<1,num_threads,shared_mem_size>>>(d_odata,d_idata, num_elements);
+  reduction<<<num_block,num_threads,shared_mem_size>>>(d_odata,d_idata, num_elements);
   getLastCudaError("reduction kernel execution failed");
 
   // copy result from device to host
 
-  checkCudaErrors( cudaMemcpy(h_data, d_odata, sizeof(float),
+  checkCudaErrors( cudaMemcpy(h_data, d_odata, mem_size,
                               cudaMemcpyDeviceToHost) );
 
+  float sum_gpu = 0.0f;
+  for (int i = 0; i < num_block; i++)
+  {
+    sum_gpu += h_data[i * num_threads];
+  }
+  
   // check results
-
-  printf("reduction error = %f\n",h_data[0]-sum);
+  printf("reduction error = %f\n",sum_gpu-sum);
 
   // cleanup memory
 
