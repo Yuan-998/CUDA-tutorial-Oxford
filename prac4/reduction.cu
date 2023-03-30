@@ -22,7 +22,7 @@ void reduction_gold(float* odata, float* idata, const unsigned int len)
 // GPU routines
 ////////////////////////////////////////////////////////////////////////////////
 
-__global__ void reduction(float *g_odata, float *g_idata)
+__global__ void reduction(float *g_odata, float *g_idata, int n)
 {
     // dynamically allocated shared memory
 
@@ -43,7 +43,12 @@ __global__ void reduction(float *g_odata, float *g_idata)
 
     // finally, first thread puts result into global memory
 
-    if (tid==0) g_odata[0] = temp[0];
+    if (tid==0) {
+      for (int i = blockDim.x; i < n; i++) {
+        temp[0] += g_idata[i];
+      }
+      g_odata[0] = temp[0];
+    }
 }
 
 
@@ -63,8 +68,8 @@ int main( int argc, const char** argv)
 
   findCudaDevice(argc, argv);
 
-  num_elements = 512;
-  num_threads  = num_elements;
+  num_elements = 516;
+  num_threads  = num_elements - num_elements % 32;
   mem_size     = sizeof(float) * num_elements;
 
   // allocate host memory to store the input data
@@ -93,7 +98,7 @@ int main( int argc, const char** argv)
   // execute the kernel
 
   shared_mem_size = sizeof(float) * num_elements;
-  reduction<<<1,num_threads,shared_mem_size>>>(d_odata,d_idata);
+  reduction<<<1,num_threads,shared_mem_size>>>(d_odata,d_idata, num_elements);
   getLastCudaError("reduction kernel execution failed");
 
   // copy result from device to host
